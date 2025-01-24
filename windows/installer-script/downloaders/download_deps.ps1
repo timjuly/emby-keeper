@@ -6,7 +6,7 @@ param(
     [Parameter()]
     [string]$RequirementsFile="requirements.txt",
     [Parameter()]
-    [string]$PythonPath="Scripts\python.exe",
+    [string]$PythonPath="python.exe",
     [Parameter()]
     [switch]$Update = $false,
     [Parameter()]
