@@ -101,6 +101,8 @@ def check_config(config):
                         Optional("allow_stream"): bool,
                         Optional("cf_challenge"): bool,
                         Optional("use_proxy"): bool,
+                        Optional("interval"): Or(PositiveInt(), str),
+                        Optional("watchtime"): str,
                     }
                 )
             ],

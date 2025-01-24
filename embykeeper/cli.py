@@ -303,6 +303,7 @@ async def main(
             watcher,
             watcher_continuous,
             watcher_schedule,
+            watcher_schedule_site,
             watcher_continuous_schedule,
         )
     if subsonic:
@@ -359,6 +360,9 @@ async def main(
                             start_time=start_time,
                             end_time=end_time,
                         )
+                    )
+                    pool.add(
+                        watcher_schedule_site(config)
                     )
                     for a in config.get("emby", ()):
                         if a.get("continuous", False):

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 import random
+import re
 import string
 from typing import TYPE_CHECKING, Iterable, Tuple, Union
 from datetime import datetime, time, timezone
@@ -212,11 +213,14 @@ async def get_cf_clearance(config, url, user_agent=None):
     return None
 
 
-async def login(config, continuous=False):
+async def login(config, continuous=None, per_site=None):
     """登录账号."""
 
     for a in config.get("emby", ()):
-        if not continuous == a.get("continuous", False):
+        if (continuous is not None) and (not continuous == a.get("continuous", False)):
+            continue
+        use_per_site = bool(a.get("watchtime", None)) or bool(a.get("interval", None))
+        if (per_site is not None) and (not per_site == use_per_site):
             continue
         logger.info(f'登录账号: "{a["username"]}" 至服务器: "{a["url"]}"')
 
@@ -584,7 +588,7 @@ async def watch_continuous(emby: Emby, loggeruser: Logger, stream: bool = False)
             return False
 
 
-async def watcher(config: dict, instant: bool = False):
+async def watcher(config: dict, instant: bool = False, per_site: bool = None):
     """入口函数 - 观看一个视频."""
 
     async def wrapper(
@@ -615,20 +619,24 @@ async def watcher(config: dict, instant: bool = False):
                 loggeruser.warning(f"一定时间内未完成播放, 保活失败.")
                 return False
 
-    logger.info("开始执行 Emby 保活.")
+    if not per_site:
+        logger.info("开始执行 Emby 保活.")
     tasks = []
     concurrent = int(config.get("watch_concurrent", 3))
     if not concurrent:
         concurrent = 100000
     sem = asyncio.Semaphore(concurrent)
-    async for emby, loggeruser, time, multiple, stream in login(config):
+    async for emby, loggeruser, time, multiple, stream in login(config, per_site=per_site, continuous=False):
         tasks.append(wrapper(sem, emby, loggeruser, time, multiple, stream))
-    if not tasks:
-        logger.info("没有指定相关的 Emby 服务器, 跳过保活.")
+    if not per_site:
+        if not tasks:
+            logger.info("没有指定相关的 Emby 服务器, 跳过保活.")
     results = await asyncio.gather(*tasks)
     fails = len(tasks) - sum(results)
-    if fails:
-        logger.error(f"保活失败 ({fails}/{len(tasks)}).")
+    if not per_site:
+        if fails:
+            logger.error(f"保活失败 ({fails}/{len(tasks)}).")
+    return not fails
 
 
 async def watcher_schedule(
@@ -638,7 +646,7 @@ async def watcher_schedule(
     days: Union[int, Tuple[int, int]] = 7,
     instant: bool = False,
 ):
-    """计划任务 - 观看一个视频."""
+    """计划任务 - 启动所有站点的一次观看."""
 
     timestamp_file = Path(config["basedir"]) / "watcher_schedule_next_timestamp"
     current_config = {
@@ -689,8 +697,109 @@ async def watcher_schedule(
             timestamp_file.unlink(missing_ok=True)
         except OSError as e:
             logger.debug(f"删除时间戳文件失败: {e}")
-        await watcher(config, instant=instant)
+        await watcher(config, instant=instant, per_site=False)
 
+async def watcher_schedule_site(config: dict, instant: bool = False):
+    """计划任务 - 启动各某个站点的一次观看."""
+
+    async def site_schedule(site_config: dict):
+        site_url = site_config["url"]
+        
+        watchtime = site_config.get('watchtime', None)
+        interval = site_config.get('interval', None)
+        
+        if not watchtime and not interval:
+            return
+        else:
+            if not watchtime:
+                watchtime = config.get('watchtime', '<11:00AM,11:00PM>')
+            if not interval:
+                interval = config.get('interval', '<3,12>')
+        
+        watchtime_match = re.match(r"<\s*(.*),\s*(.*)\s*>", watchtime)
+        if watchtime_match:
+            start_time, end_time = [
+                parser.parse(watchtime_match.group(i)).time() for i in (1, 2)
+            ]
+        else:
+            start_time = end_time = parser.parse(watchtime).time()
+            
+        if interval and not isinstance(interval, int):
+            try:
+                interval = abs(int(interval))
+            except ValueError:
+                interval_range_match = re.match(r"<(\d+),(\d+)>", interval)
+                if interval_range_match:
+                    interval = [int(interval_range_match.group(1)), int(interval_range_match.group(2))]
+                else:
+                    logger.error(f'站点 "{site_url}": 无法解析 Emby 保活间隔天数: {interval}, 保活将不会运行.')
+                    return False
+                
+        # 将 URL 转换为 site_name: 去除协议前缀，替换所有符号为下划线，合并连续下划线
+        site_name = re.sub(r'^https?://', '', site_url)  # 移除 http:// 或 https://
+        site_name = re.sub(r'[^\w\s]', '_', site_name)   # 将所有非字母数字字符替换为下划线
+        site_name = re.sub(r'_+', '_', site_name)        # 将多个连续下划线替换为单个
+        site_name = site_name.strip('_')                 # 移除开头和结尾的下划线
+        
+        timestamp_file = Path(config["basedir"]) / f"watcher_schedule_next_timestamp_{site_name}"
+        current_config = {
+            "start_time": start_time.strftime("%H:%M"),
+            "end_time": end_time.strftime("%H:%M"),
+            "days": interval if isinstance(interval, int) else list(interval),
+        }
+        
+        while True:
+            next_dt = None
+            config_changed = False
+
+            if timestamp_file.exists():
+                try:
+                    stored_data = json.loads(timestamp_file.read_text())
+                    if not isinstance(stored_data, dict):
+                        raise ValueError("invalid cache")
+                    stored_timestamp = stored_data["timestamp"]
+                    stored_config = stored_data["config"]
+
+                    if stored_config != current_config:
+                        logger.info(f'站点 "{site_url}": 计划任务配置已更改，将重新计算下次执行时间.')
+                        config_changed = True
+                    else:
+                        next_dt = datetime.fromtimestamp(stored_timestamp)
+                        if next_dt > datetime.now():
+                            logger.info(f'站点 "{site_url}": 从缓存中读取到下次保活时间: {next_dt.strftime("%m-%d %H:%M %p")}.')
+                except (ValueError, OSError, json.JSONDecodeError) as e:
+                    logger.debug(f'站点 "{site_url}": 读取存储的时间戳失败: {e}')
+                    config_changed = True
+
+            if not next_dt or next_dt <= datetime.now() or config_changed:
+                if isinstance(interval, int):
+                    rand_days = interval
+                else:
+                    rand_days = random.randint(*interval)
+                next_dt = next_random_datetime(start_time, end_time, interval_days=rand_days)
+                logger.info(f'站点 "{site_url}": 下一次保活将在 {next_dt.strftime("%m-%d %H:%M %p")} 进行.')
+
+                try:
+                    save_data = {"timestamp": next_dt.timestamp(), "config": current_config}
+                    timestamp_file.write_text(json.dumps(save_data))
+                except OSError as e:
+                    logger.debug(f'站点 "{site_url}": 存储时间戳失败: {e}')
+            
+            await asyncio.sleep((next_dt - datetime.now()).total_seconds())
+            try:
+                timestamp_file.unlink(missing_ok=True)
+            except OSError as e:
+                logger.debug(f'站点 "{site_url}": 删除时间戳文件失败: {e}')
+                
+            filtered_config = config.copy()
+            filtered_config["emby"] = [site_config]
+            
+            return await watcher(filtered_config, instant=instant, per_site=True)
+
+    tasks = []
+    for site_config in config.get('emby', []):
+        tasks.append(site_schedule(site_config))
+    return await asyncio.gather(*tasks)
 
 async def watcher_continuous(config: dict):
     """入口函数 - 持续观看."""
@@ -712,7 +821,7 @@ async def watcher_continuous(config: dict):
 
     logger.info("开始执行 Emby 持续观看.")
     tasks = []
-    async for emby, loggeruser, time, _, stream in login(config, continuous=True):
+    async for emby, loggeruser, time, _, stream in login(config, continuous=True, per_site=False):
         tasks.append(wrapper(emby, loggeruser, time, stream))
     if not tasks:
         logger.info("没有指定相关的 Emby 服务器, 跳过持续观看.")
@@ -722,7 +831,7 @@ async def watcher_continuous(config: dict):
 async def watcher_continuous_schedule(
     config: dict, start_time=time(11, 0), end_time=time(23, 0), days: int = 1
 ):
-    """计划任务 - 持续观看."""
+    """计划任务 - 启动相关站点的一次持续观看."""
 
     timestamp_file = Path(config["basedir"]) / "watcher_continuous_schedule_next_timestamp"
     current_config = {
