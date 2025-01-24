@@ -196,7 +196,9 @@ async def listener_schedule(
                 else:
                     next_dt = datetime.fromtimestamp(stored_timestamp)
                     if next_dt > datetime.now():
-                        logger.bind(log=True).info(f"从缓存中读取到下次保活时间: {next_dt.strftime('%m-%d %H:%M %p')}.")
+                        logger.bind(log=True).info(
+                            f"从缓存中读取到下次保活时间: {next_dt.strftime('%m-%d %H:%M %p')}."
+                        )
             except (ValueError, OSError, json.JSONDecodeError) as e:
                 logger.debug(f"读取存储的时间戳失败: {e}")
                 config_changed = True

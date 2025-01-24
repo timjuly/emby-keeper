@@ -673,7 +673,9 @@ async def watcher_schedule(
                 else:
                     next_dt = datetime.fromtimestamp(stored_timestamp)
                     if next_dt > datetime.now():
-                        logger.bind(log=True).info(f"从缓存中读取到下次保活时间: {next_dt.strftime('%m-%d %H:%M %p')}.")
+                        logger.bind(log=True).info(
+                            f"从缓存中读取到下次保活时间: {next_dt.strftime('%m-%d %H:%M %p')}."
+                        )
             except (ValueError, OSError, json.JSONDecodeError) as e:
                 logger.debug(f"读取存储的时间戳失败: {e}")
                 config_changed = True
@@ -699,31 +701,30 @@ async def watcher_schedule(
             logger.debug(f"删除时间戳文件失败: {e}")
         await watcher(config, instant=instant, per_site=False)
 
+
 async def watcher_schedule_site(config: dict, instant: bool = False):
     """计划任务 - 启动各某个站点的一次观看."""
 
     async def site_schedule(site_config: dict):
         site_url = site_config["url"]
-        
-        watchtime = site_config.get('watchtime', None)
-        interval = site_config.get('interval', None)
-        
+
+        watchtime = site_config.get("watchtime", None)
+        interval = site_config.get("interval", None)
+
         if not watchtime and not interval:
             return
         else:
             if not watchtime:
-                watchtime = config.get('watchtime', '<11:00AM,11:00PM>')
+                watchtime = config.get("watchtime", "<11:00AM,11:00PM>")
             if not interval:
-                interval = config.get('interval', '<3,12>')
-        
+                interval = config.get("interval", "<3,12>")
+
         watchtime_match = re.match(r"<\s*(.*),\s*(.*)\s*>", watchtime)
         if watchtime_match:
-            start_time, end_time = [
-                parser.parse(watchtime_match.group(i)).time() for i in (1, 2)
-            ]
+            start_time, end_time = [parser.parse(watchtime_match.group(i)).time() for i in (1, 2)]
         else:
             start_time = end_time = parser.parse(watchtime).time()
-            
+
         if interval and not isinstance(interval, int):
             try:
                 interval = abs(int(interval))
@@ -732,22 +733,24 @@ async def watcher_schedule_site(config: dict, instant: bool = False):
                 if interval_range_match:
                     interval = [int(interval_range_match.group(1)), int(interval_range_match.group(2))]
                 else:
-                    logger.error(f'站点 "{site_url}": 无法解析 Emby 保活间隔天数: {interval}, 保活将不会运行.')
+                    logger.error(
+                        f'站点 "{site_url}": 无法解析 Emby 保活间隔天数: {interval}, 保活将不会运行.'
+                    )
                     return False
-                
+
         # 将 URL 转换为 site_name: 去除协议前缀，替换所有符号为下划线，合并连续下划线
-        site_name = re.sub(r'^https?://', '', site_url)  # 移除 http:// 或 https://
-        site_name = re.sub(r'[^\w\s]', '_', site_name)   # 将所有非字母数字字符替换为下划线
-        site_name = re.sub(r'_+', '_', site_name)        # 将多个连续下划线替换为单个
-        site_name = site_name.strip('_')                 # 移除开头和结尾的下划线
-        
+        site_name = re.sub(r"^https?://", "", site_url)  # 移除 http:// 或 https://
+        site_name = re.sub(r"[^\w\s]", "_", site_name)  # 将所有非字母数字字符替换为下划线
+        site_name = re.sub(r"_+", "_", site_name)  # 将多个连续下划线替换为单个
+        site_name = site_name.strip("_")  # 移除开头和结尾的下划线
+
         timestamp_file = Path(config["basedir"]) / f"watcher_schedule_next_timestamp_{site_name}"
         current_config = {
             "start_time": start_time.strftime("%H:%M"),
             "end_time": end_time.strftime("%H:%M"),
             "days": interval if isinstance(interval, int) else list(interval),
         }
-        
+
         while True:
             next_dt = None
             config_changed = False
@@ -766,7 +769,9 @@ async def watcher_schedule_site(config: dict, instant: bool = False):
                     else:
                         next_dt = datetime.fromtimestamp(stored_timestamp)
                         if next_dt > datetime.now():
-                            logger.bind(log=True).info(f'站点 "{site_url}": 从缓存中读取到下次保活时间: {next_dt.strftime("%m-%d %H:%M %p")}.')
+                            logger.bind(log=True).info(
+                                f'站点 "{site_url}": 从缓存中读取到下次保活时间: {next_dt.strftime("%m-%d %H:%M %p")}.'
+                            )
                 except (ValueError, OSError, json.JSONDecodeError) as e:
                     logger.debug(f'站点 "{site_url}": 读取存储的时间戳失败: {e}')
                     config_changed = True
@@ -777,29 +782,32 @@ async def watcher_schedule_site(config: dict, instant: bool = False):
                 else:
                     rand_days = random.randint(*interval)
                 next_dt = next_random_datetime(start_time, end_time, interval_days=rand_days)
-                logger.bind(log=True).info(f'站点 "{site_url}": 下一次保活将在 {next_dt.strftime("%m-%d %H:%M %p")} 进行.')
+                logger.bind(log=True).info(
+                    f'站点 "{site_url}": 下一次保活将在 {next_dt.strftime("%m-%d %H:%M %p")} 进行.'
+                )
 
                 try:
                     save_data = {"timestamp": next_dt.timestamp(), "config": current_config}
                     timestamp_file.write_text(json.dumps(save_data))
                 except OSError as e:
                     logger.debug(f'站点 "{site_url}": 存储时间戳失败: {e}')
-            
+
             await asyncio.sleep((next_dt - datetime.now()).total_seconds())
             try:
                 timestamp_file.unlink(missing_ok=True)
             except OSError as e:
                 logger.debug(f'站点 "{site_url}": 删除时间戳文件失败: {e}')
-                
+
             filtered_config = config.copy()
             filtered_config["emby"] = [site_config]
-            
+
             return await watcher(filtered_config, instant=instant, per_site=True)
 
     tasks = []
-    for site_config in config.get('emby', []):
+    for site_config in config.get("emby", []):
         tasks.append(site_schedule(site_config))
     return await asyncio.gather(*tasks)
+
 
 async def watcher_continuous(config: dict):
     """入口函数 - 持续观看."""

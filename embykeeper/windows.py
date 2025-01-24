@@ -67,7 +67,7 @@ def main():
     os.system("cls")
     var.console.rule("Embykeeper")
     args = sys.argv[1:]
-    if '-I' in args:
+    if "-I" in args:
         args = sys.argv[1:] + ["-W"]
     else:
         args = sys.argv[1:] + ["-W", "-i"]

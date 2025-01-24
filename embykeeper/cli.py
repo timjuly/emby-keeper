@@ -361,9 +361,7 @@ async def main(
                             end_time=end_time,
                         )
                     )
-                    pool.add(
-                        watcher_schedule_site(config)
-                    )
+                    pool.add(watcher_schedule_site(config))
                     for a in config.get("emby", ()):
                         if a.get("continuous", False):
                             pool.add(
