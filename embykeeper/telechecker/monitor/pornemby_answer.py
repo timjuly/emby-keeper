@@ -157,6 +157,7 @@ class _PornembyAnswerAnswerMonitor(Monitor):
             self.log.info(f"从缓存回答问题为{result}: {spec}.")
         elif self.config.get("only_history", False):
             self.log.info(f"未从历史缓存找到问题, 请自行回答: {spec}.")
+            return
         else:
             question = key[0]
             choices = key[1]
