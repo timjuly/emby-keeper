@@ -265,7 +265,7 @@ async def checkiner_schedule(
                 else:
                     next_dt = datetime.fromtimestamp(stored_timestamp)
                     if next_dt > datetime.now():
-                        logger.bind(scheme="telechecker").info(
+                        logger.bind(scheme="telechecker").bind(log=True).info(
                             f"从缓存中读取到下次签到时间: {next_dt.strftime('%m-%d %H:%M %p')}."
                         )
             except (ValueError, OSError, json.JSONDecodeError) as e:
@@ -274,7 +274,7 @@ async def checkiner_schedule(
 
         if not next_dt or next_dt <= datetime.now() or config_changed:
             next_dt = next_random_datetime(start_time, end_time, interval_days=days)
-            logger.bind(scheme="telechecker").info(
+            logger.bind(scheme="telechecker").bind(log=True).info(
                 f"下一次签到将在 {next_dt.strftime('%m-%d %H:%M %p')} 进行."
             )
             try:

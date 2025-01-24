@@ -66,7 +66,12 @@ def main():
     generate_config(config)
     os.system("cls")
     var.console.rule("Embykeeper")
-    cli(["-i -W"])
+    args = sys.argv[1:]
+    if '-I' in args:
+        args = sys.argv[1:] + ["-W"]
+    else:
+        args = sys.argv[1:] + ["-W", "-i"]
+    cli(args)
 
 
 if __name__ == "__main__":

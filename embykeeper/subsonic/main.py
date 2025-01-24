@@ -196,7 +196,7 @@ async def listener_schedule(
                 else:
                     next_dt = datetime.fromtimestamp(stored_timestamp)
                     if next_dt > datetime.now():
-                        logger.info(f"从缓存中读取到下次保活时间: {next_dt.strftime('%m-%d %H:%M %p')}.")
+                        logger.bind(log=True).info(f"从缓存中读取到下次保活时间: {next_dt.strftime('%m-%d %H:%M %p')}.")
             except (ValueError, OSError, json.JSONDecodeError) as e:
                 logger.debug(f"读取存储的时间戳失败: {e}")
                 config_changed = True
@@ -207,7 +207,7 @@ async def listener_schedule(
             else:
                 rand_days = random.randint(*days)
             next_dt = next_random_datetime(start_time, end_time, interval_days=rand_days)
-            logger.info(f"下一次保活将在 {next_dt.strftime('%m-%d %H:%M %p')} 进行.")
+            logger.bind(log=True).info(f"下一次保活将在 {next_dt.strftime('%m-%d %H:%M %p')} 进行.")
 
             try:
                 save_data = {"timestamp": next_dt.timestamp(), "config": current_config}

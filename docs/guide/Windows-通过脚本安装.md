@@ -17,6 +17,14 @@
 如果还是不行, 请检查您的网络环境, 或进行反馈.
 :::
 
+:::info 文件说明
+
+`Embykeeper.bat`: 默认的启动文件, 支持命令行参数.
+`Embykeeper-NoMirror.bat`: 如果需要下载, 则不使用镜像源.
+`Embykeeper-Instant.bat`: 启动时立刻运行一次签到或保活, 相当于命令行参数 `-i`.
+
+:::
+
 安装后 Embykeeper 将首次运行并在当前目录下生成模板 `config.toml` 文件 (您也可以从[这里](https://github.com/emby-keeper/emby-keeper/blob/main/config.example.toml)下载).
 
 <!--@include: ./_简要配置.md-->
