@@ -33,7 +33,7 @@ export default defineConfig({
 
     footer: {
       message: 'Released under the GPLv3 License.',
-      copyright: 'Copyright © 2024',
+      copyright: 'Copyright © 2023-2025',
     },
 
     nav: [
