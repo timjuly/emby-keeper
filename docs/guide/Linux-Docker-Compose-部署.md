@@ -10,6 +10,15 @@
 这是由于首次登录会命令行请求两步验证码, 登录成功后会生成 `.login` 后缀的文件, 随后才能部署为 `docker-compose` 服务.
 :::
 
+::: info 提示
+如果你还没有安装 Docker Compose，下面是其安装步骤:
+
+```bash
+curl -L "https://github.com/docker/compose/releases/download/v2.32.4/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose
+```
+:::
+
 您应该已经运行了:
 
 ```bash
