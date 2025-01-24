@@ -37,7 +37,7 @@ random = 60
 # scheme = "socks5" # 可选: http / socks5
 
 # 服务设置, 当您需要禁用某些站点时, 请将该段取消注释并修改.
-# 该部分内容是根据 Embykeeper 6.6.3 生成的.
+# 该部分内容是根据 Embykeeper 6.6.4 生成的.
 # 详见: https://emby-keeper.github.io/guide/配置文件#service-子项
 # 使用 checkiner = ["all"] 以启用所有签到器, 使用 checkiner = ["sgk"] 以启用所有社工库签到器.
 
@@ -57,13 +57,13 @@ random = 60
 # 详见: https://emby-keeper.github.io/guide/配置文件#telegram-子项
 
 [[telegram]]
-phone = "+8619459613475"
+phone = "+8614032281456"
 checkin = true
 send = false # 启用该账号的自动水群功能 (需要高级账号, 谨慎使用)
 monitor = false # 启用该账号的自动监控功能 (需要高级账号)
 
 [[telegram]]
-phone = "+8617289117556"
+phone = "+8611372390638"
 checkin = true
 send = false # 启用该账号的自动水群功能 (需要高级账号, 谨慎使用)
 monitor = false # 启用该账号的自动监控功能 (需要高级账号)
@@ -72,13 +72,14 @@ monitor = false # 启用该账号的自动监控功能 (需要高级账号)
 # 详见: https://emby-keeper.github.io/guide/配置文件#emby-子项
 
 [[emby]]
-url = "https://gonzales.com/"
-username = "craigblack"
-password = "4HyKrfCo*1"
+url = "https://www.chavez.com/"
+username = "erinlee"
+password = "))^eOZlZ7d"
 time = [120, 240] # 模拟观看的时长范围 (秒)
 
 [[emby]]
-url = "https://www.scott.org/"
-username = "michelleschmidt"
-password = "LgL&r8LI%4"
+url = "https://www.perez.com/"
+username = "pmueller"
+password = "r1HJ4GkV(^"
 time = [120, 240] # 模拟观看的时长范围 (秒)
+
