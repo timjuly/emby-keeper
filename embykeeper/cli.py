@@ -219,7 +219,7 @@ async def main(
         monitor = True
         send = True
 
-    if top and var.console.is_terminal:
+    if top and var.console.is_terminal and var.console.is_interactive:
         from .top import topper
 
         asyncio.create_task(topper())
