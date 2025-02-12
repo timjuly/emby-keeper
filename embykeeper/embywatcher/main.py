@@ -302,6 +302,7 @@ async def login(config, continuous=None, per_site=None):
                 a.get("time", None if continuous else [120, 240]),
                 True if continuous else a.get("allow_multiple", True),
                 a.get("allow_stream", False),
+                a.get("hide", False),
             )
         else:
             logger.bind(log=True).error(f'Emby "{a["url"]}" 无法获取元信息而跳过, 请重新检查配置.')
@@ -313,6 +314,7 @@ async def watch(
     loggeruser: Logger,
     time: Union[float, Tuple[float, float]],
     stream: bool = False,
+    hide: bool = False,
     retries: int = 5,
 ):
     """
@@ -392,13 +394,14 @@ async def watch(
                             await asyncio.sleep(rt)
                         break
                     finally:
-                        try:
-                            if not await asyncio.shield(asyncio.wait_for(hide_from_resume(obj), 5)):
-                                loggeruser.debug(f"未能成功从最近播放中隐藏视频.")
-                            else:
-                                loggeruser.info(f"已从最近播放中隐藏该视频.")
-                        except asyncio.TimeoutError:
-                            loggeruser.debug(f"从最近播放中隐藏视频超时.")
+                        if hide:
+                            try:
+                                if not await asyncio.shield(asyncio.wait_for(hide_from_resume(obj), 5)):
+                                    loggeruser.debug(f"未能成功从最近播放中隐藏视频.")
+                                else:
+                                    loggeruser.info(f"已从最近播放中隐藏该视频.")
+                            except asyncio.TimeoutError:
+                                loggeruser.debug(f"从最近播放中隐藏视频超时.")
             else:
                 loggeruser.warning(f"由于没有成功播放视频, 保活失败, 请重新检查配置.")
                 return False
@@ -424,6 +427,7 @@ async def watch_multiple(
     loggeruser: Logger,
     time: Union[float, Tuple[float, float]],
     stream: bool = False,
+    hide: bool = False,
     retries: int = 5,
 ):
     if isinstance(time, Iterable):
@@ -515,13 +519,14 @@ async def watch_multiple(
                             await asyncio.sleep(rt)
                         break
                     finally:
-                        try:
-                            if not await asyncio.shield(asyncio.wait_for(hide_from_resume(obj), 5)):
-                                loggeruser.debug(f"未能成功从最近播放中隐藏视频.")
-                            else:
-                                loggeruser.info(f"已从最近播放中隐藏该视频.")
-                        except asyncio.TimeoutError:
-                            loggeruser.debug(f"从最近播放中隐藏视频超时.")
+                        if hide:
+                            try:
+                                if not await asyncio.shield(asyncio.wait_for(hide_from_resume(obj), 5)):
+                                    loggeruser.debug(f"未能成功从最近播放中隐藏视频.")
+                                else:
+                                    loggeruser.info(f"已从最近播放中隐藏该视频.")
+                            except asyncio.TimeoutError:
+                                loggeruser.debug(f"从最近播放中隐藏视频超时.")
             else:
                 loggeruser.warning(f"由于没有成功播放视频, 保活失败, 请重新检查配置.")
                 return False
@@ -542,13 +547,15 @@ async def watch_multiple(
             return False
 
 
-async def watch_continuous(emby: Emby, loggeruser: Logger, stream: bool = False):
+async def watch_continuous(emby: Emby, loggeruser: Logger, stream: bool = False, hide: bool = False):
     """
     主执行函数 - 持续观看.
 
     参数:
         emby: Emby 客户端
         loggeruser: 日志器
+        stream: 是否允许流媒体
+        hide: 是否从继续收看中隐藏
     """
     while True:
         try:
@@ -571,11 +578,14 @@ async def watch_continuous(emby: Emby, loggeruser: Logger, stream: bool = False)
                     await asyncio.sleep(rt)
                     continue
                 finally:
-                    try:
-                        if not await asyncio.shield(asyncio.wait_for(hide_from_resume(obj), 2)):
-                            loggeruser.debug(f"未能成功从最近播放中隐藏视频.")
-                    except asyncio.TimeoutError:
-                        loggeruser.debug(f"从最近播放中隐藏视频超时.")
+                    if hide:
+                        try:
+                            if not await asyncio.shield(asyncio.wait_for(hide_from_resume(obj), 2)):
+                                loggeruser.debug(f"未能成功从最近播放中隐藏视频.")
+                            else:
+                                loggeruser.info(f"已从最近播放中隐藏该视频.")
+                        except asyncio.TimeoutError:
+                            loggeruser.debug(f"从最近播放中隐藏视频超时.")
         except httpx.HTTPError as e:
             rt = random.uniform(30, 60)
             loggeruser.info(f"连接失败, 等待 {rt:.0f} 秒后重试: {e}.")
@@ -598,6 +608,7 @@ async def watcher(config: dict, instant: bool = False, per_site: bool = None):
         time: float,
         multiple: bool,
         stream: bool,
+        hide: bool,
     ):
         async with sem:
             try:
@@ -611,10 +622,10 @@ async def watcher(config: dict, instant: bool = False, per_site: bool = None):
                     tm = time * 4
                 if multiple:
                     return await asyncio.wait_for(
-                        watch_multiple(emby, loggeruser, time, stream), max(tm, 600)
+                        watch_multiple(emby, loggeruser, time, stream, hide), max(tm, 600)
                     )
                 else:
-                    return await asyncio.wait_for(watch(emby, loggeruser, time, stream), max(tm, 600))
+                    return await asyncio.wait_for(watch(emby, loggeruser, time, stream, hide), max(tm, 600))
             except asyncio.TimeoutError:
                 loggeruser.warning(f"一定时间内未完成播放, 保活失败.")
                 return False
@@ -626,8 +637,8 @@ async def watcher(config: dict, instant: bool = False, per_site: bool = None):
     if not concurrent:
         concurrent = 100000
     sem = asyncio.Semaphore(concurrent)
-    async for emby, loggeruser, time, multiple, stream in login(config, per_site=per_site, continuous=False):
-        tasks.append(wrapper(sem, emby, loggeruser, time, multiple, stream))
+    async for emby, loggeruser, time, multiple, stream, hide in login(config, per_site=per_site, continuous=False):
+        tasks.append(wrapper(sem, emby, loggeruser, time, multiple, stream, hide))
     if not per_site:
         if not tasks:
             logger.info("没有指定相关的 Emby 服务器, 跳过保活.")
@@ -812,7 +823,7 @@ async def watcher_schedule_site(config: dict, instant: bool = False):
 async def watcher_continuous(config: dict):
     """入口函数 - 持续观看."""
 
-    async def wrapper(emby: Emby, loggeruser: Logger, time: float, stream: bool):
+    async def wrapper(emby: Emby, loggeruser: Logger, time: float, stream: bool, hide: bool):
         if time:
             if isinstance(time, Iterable):
                 time = random.uniform(*time)
@@ -820,7 +831,7 @@ async def watcher_continuous(config: dict):
         else:
             loggeruser.info(f"即将无限连续播放视频.")
         try:
-            await asyncio.wait_for(watch_continuous(emby, loggeruser, stream), time)
+            await asyncio.wait_for(watch_continuous(emby, loggeruser, stream, hide), time)
         except asyncio.TimeoutError:
             loggeruser.info(f"连续播放结束, 将在明天继续连续播放.")
             return True
@@ -829,8 +840,8 @@ async def watcher_continuous(config: dict):
 
     logger.info("开始执行 Emby 持续观看.")
     tasks = []
-    async for emby, loggeruser, time, _, stream in login(config, continuous=True, per_site=False):
-        tasks.append(wrapper(emby, loggeruser, time, stream))
+    async for emby, loggeruser, time, _, stream, hide in login(config, continuous=True, per_site=False):
+        tasks.append(wrapper(emby, loggeruser, time, stream, hide))
     if not tasks:
         logger.info("没有指定相关的 Emby 服务器, 跳过持续观看.")
     return await asyncio.gather(*tasks)
